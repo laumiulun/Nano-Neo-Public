@@ -1,0 +1,7 @@
+Matplotlib>=3.1.2
+Numpy>=1.17.2
+
+future~=0.18.2
+psutil~=5.8.0
+scipy~=1.6.3
+setuptools~=52.0.0
