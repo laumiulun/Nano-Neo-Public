@@ -5,16 +5,22 @@ from .pathObj import OliverPharr
 from .individual import Individual
 from .pathrange import Pathrange_limits
 from .nano_neo_data import NanoIndent_Data
+
+"""
+Author: Andy Lau
+"""
+
+
 class NANO_GA:
 
     def initialize_params(self,verbose = False):
         """
         Initialize Parameters
         """
-
         # print("Initialize Parameters")
         self.intervalK = 0.05
         self.tol = np.finfo(np.float64).resolution
+
     def initialize_variable(self):
         """
         Initalize variables
@@ -120,6 +126,7 @@ class NANO_GA:
         self.data_obj.pre_processing(limits=(self.data_cutoff[0],self.data_cutoff[1]))
         self.x_slice = self.data_obj.get_slice_data()[:,0]
         self.y_slice = self.data_obj.get_slice_data()[:,1]
+
         self.pars_range = {
             'A_range': A_range,
             'hf_range': hf_range,
@@ -127,12 +134,18 @@ class NANO_GA:
         }
 
     def create_range(self,value,percentage,dt,prec):
+        """
+        Create delta to calculate the ranges 
+        """
         minus = round(value - percentage*value,prec)
         plus = round(value + percentage*value,prec)
         range = np.arange(minus,plus+dt,dt)
         return range
 
     def generateIndividual(self):
+        """
+        Generate singular individual
+        """
 
         ind = Individual(self.npaths,self.pars_range)
         return ind
@@ -151,6 +164,7 @@ class NANO_GA:
         """
         Evaluate fitness of a individual
         """
+
         loss = 0
         Individual = indObj.get_func()
 
@@ -165,7 +179,8 @@ class NANO_GA:
         for j in range(len(self.x_slice)):
 
             loss = loss + (yTotal[j]*self.x_slice[j]**2 - self.y_slice[j]* self.x_slice[j]**2 )**2
-
+        # if loss == np.nan:
+            # print(individual[0].verbose())
         return loss
 
     def eval_Population(self):
@@ -175,22 +190,28 @@ class NANO_GA:
 
         score = []
         populationPerf = {}
-
+        self.nan_counter = 0
         for i,individual in enumerate(self.Populations):
 
             temp_score = self.fitness(individual)
-            score.append(temp_score)
-
-            populationPerf[individual] = temp_score
-
-
+            # Calculate the score, if encounter nan, discard and generate new individual later
+            if np.isnan(temp_score):
+                self.nan_counter +=1
+            else:
+                score.append(temp_score)
+                populationPerf[individual] = temp_score
         self.sorted_population = sorted(populationPerf.items(), key=operator.itemgetter(1), reverse=False)
 
         self.currBestFit = self.sorted_population[0]
 
         return score
+    
 
     def next_generation(self):
+        """
+        Calculate next generations
+
+        """
         self.st = time.time()
         # ray.init()
         self.logger.info("---------------------------------------------------------")
@@ -211,15 +232,17 @@ class NANO_GA:
             self.logger.info(bcolors.BOLD + "Best fit: " + bcolors.OKBLUE + str(self.currBestFit[1]) + bcolors.ENDC)
             self.logger.info("Best fit combination:\n" + str(np.asarray(self.sorted_population[0][0].get())))
             self.logger.info(bcolors.BOLD + "History Best: " + bcolors.OKBLUE + str(self.globBestFit[1]) +bcolors.ENDC)
+            self.logger.info("NanCounter: " + str(self.nan_counter))
             self.logger.info("History Best Indi:\n" + str(np.asarray(self.globBestFit[0].get())))
 
         nextBreeders = self.selectFromPopulation()
         self.logger.info("Number of Breeders: " + str(len(self.parents)))
-        self.createChildren()
         self.logger.info("DiffCounter: " + str(self.diffCounter))
         self.logger.info("Diff %: " + str(self.diffCounter / self.genNum))
         self.logger.info("Mutation Chance: " + str(self.mut_chance))
         self.mutatePopulation()
+        self.createChildren()
+
 
         self.et = timecall()
         self.tdiff = self.et - self.st
@@ -252,7 +275,7 @@ class NANO_GA:
                     self.mut_chance -= 0.5
                     self.mut_chance = abs(self.mut_chance)
 
-
+        
         for i in range(self.npops):
             if random.random()*100 < self.mut_chance:
                 self.nmutate += 1
@@ -331,8 +354,12 @@ class NANO_GA:
 
     def selectFromPopulation(self):
         self.parents = []
-        # choose the top samples
-        for i in range(self.n_bestsam):
+
+        select_val = np.minimum(self.n_bestsam,len(self.sorted_population))
+        self.n_recover = 0
+        if len(self.sorted_population) < self.n_bestsam:
+            self.n_recover = self.n_bestsam - len(self.sorted_population)
+        for i in range(select_val):
             self.parents.append(self.sorted_population[i][0])
 
     def crossover(self,individual1, individual2):
@@ -366,6 +393,8 @@ class NANO_GA:
             self.nextPopulation.append(self.parents[i])
         # print(len(self.nextPopulation))
         # --- use the breeder to crossover
+        # print(abs(self.npops-self.n_bestsam)-self.n_lucksam)
+
         for i in range(abs(self.npops-self.n_bestsam)-self.n_lucksam):
             par_ind = np.random.choice(len(self.parents),size=2,replace=False)
             child = self.crossover(self.parents[par_ind[0]],self.parents[par_ind[1]])
@@ -374,6 +403,13 @@ class NANO_GA:
 
         for i in range(self.n_lucksam):
             self.nextPopulation.append(self.generateIndividual())
+        # print(len(self.nextPopulation))
+
+        for i in range(self.n_recover):
+            self.nextPopulation.append(self.generateIndividual())
+
+        # for i in range(self.nan_counter):
+        #     self.nextPopulation.append(self.generateIndividual())
 
         random.shuffle(self.nextPopulation)
         self.Populations = self.nextPopulation

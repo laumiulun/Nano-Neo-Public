@@ -1,13 +1,13 @@
 """
-Authors     Megan Burrill, Andy Lau
+Authors     Miu Lun Lau, Megan Burrill
 Email       mburrill@hawk.iit.edu, andylau@u.boisestate.edu
-Version     0.1
-Date        Aug 3, 2021
+Version     0.2
+Date        Jul 28, 2022
 """
 
 """
 TODO
-- analysis
+- analysis [Done]
 - improve graphing
 - preprocessing?
 - connect calibration to nano-indent
@@ -18,6 +18,7 @@ from threading import Thread
 from tkinter import ttk, Tk, N, W, E, S, StringVar, IntVar, DoubleVar, BooleanVar, Checkbutton, NORMAL, DISABLED, \
     scrolledtext, filedialog, messagebox, LabelFrame, Toplevel, END, TOP
 from tkinter.font import Font
+from tokenize import Double
 
 # import matplotlib
 import matplotlib
@@ -130,10 +131,13 @@ class App():
         # Fitting parameters(column 4)
         self.a_min = DoubleVar(self.root, 0.001)
         self.a_max = DoubleVar(self.root, 1000)
+        self.a_delta = DoubleVar(self.root,1e-7)
         self.h_f_min = DoubleVar(self.root, 400)
         self.h_f_max = DoubleVar(self.root, 1300)
+        self.h_f_delta = DoubleVar(self.root,1)
         self.m_min = DoubleVar(self.root, 1)
         self.m_max = DoubleVar(self.root, 2)
+        self.m_delta = DoubleVar(self.root,0.01)
         self.percent_min = DoubleVar(self.root, 0.10)
         self.percent_max = DoubleVar(self.root, 0.90)
         self.path_fit = StringVar(self.root, "Select a fit type")
@@ -262,9 +266,9 @@ class App():
                  "{h_f_range} \nm_range = {m_range} \npercent_range={per_range} \nnu={nu}"
                  .format(npath=1,
                          fit=str(self.path_fit.get()),
-                         a_range=", ".join(str(i) for i in [self.a_min.get(), self.a_max.get(), 0.01]),
-                         h_f_range=", ".join(str(i) for i in [self.h_f_min.get(), self.h_f_max.get(), 0.1]),
-                         m_range=", ".join(str(i) for i in [self.m_min.get(), self.m_max.get(), 0.1]),
+                         a_range=", ".join(str(i) for i in [self.a_min.get(), self.a_max.get(), self.a_delta.get()]),
+                         h_f_range=", ".join(str(i) for i in [self.h_f_min.get(), self.h_f_max.get(), self.h_f_delta.get()]),
+                         m_range=", ".join(str(i) for i in [self.m_min.get(), self.m_max.get(), self.m_delta.get()]),
                          per_range=", ".join(str(i) for i in [self.percent_min.get(), self.percent_max.get()]),
                          nu=self.nu.get()))
 
@@ -790,11 +794,14 @@ class App():
         Build fitting parameters tab
         """
         arr_nano_mins = ["A min", "h_f min", "m min", "% min", 'Poisson Ratio Sample', "Data Load Unit", "Caluclated Modulus Unit"]
-        for i in range(0, len(arr_nano_mins)):
-            self.description_tabs(arr_nano_mins, self.fitting_param_tab, row=[2, 3, 4, 5, 6, 8, 9])
+        self.description_tabs(arr_nano_mins, self.fitting_param_tab, row=[2, 3, 4, 5, 6, 8, 9])
+
         arr_nano_maxs = ["A max", "h_f max", "m max", "% max", "Data Depth Unit"]
-        for i in range(0, len(arr_nano_maxs)):
-            self.description_tabs(arr_nano_maxs, self.fitting_param_tab, row=[2, 3, 4, 5, 8], column=3)
+        self.description_tabs(arr_nano_maxs, self.fitting_param_tab, row=[2, 3, 4, 5, 8], column=3)
+
+        arr_nano_del = ["A delta", "h_f delta ", "m delta"]
+        # for i in range(0, len(arr_nano_del)):
+        self.description_tabs(arr_nano_del, self.fitting_param_tab, row=[2, 3, 4], column=5)
 
         a_min_entry = ttk.Entry(self.fitting_param_tab, textvariable=self.a_min, font=self.entryFont)
         a_min_entry.grid(column=2, row=2, sticky=(W, E))
@@ -815,6 +822,13 @@ class App():
         m_max_entry.grid(column=4, row=4, sticky=(W, E))
         percent_max_entry = ttk.Entry(self.fitting_param_tab, textvariable=self.percent_max, font=self.entryFont)
         percent_max_entry.grid(column=4, row=5, sticky=(W, E))
+
+        a_delta_entry = ttk.Entry(self.fitting_param_tab, textvariable=self.a_delta, font=self.entryFont)
+        a_delta_entry.grid(column=6, row=2, sticky=(W, E))
+        h_f_delta_entry = ttk.Entry(self.fitting_param_tab, textvariable=self.h_f_delta, font=self.entryFont)
+        h_f_delta_entry.grid(column=6, row=3, sticky=(W, E))
+        m_delta_entry = ttk.Entry(self.fitting_param_tab, textvariable=self.m_delta, font=self.entryFont)
+        m_delta_entry.grid(column=6, row=4, sticky=(W, E))       
 
         # Adding path fits completely separate so that the others have the two column format
         path_fit = ttk.Label(self.fitting_param_tab, text="fit type", font=self.labelFont)

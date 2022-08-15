@@ -39,9 +39,7 @@ class NanoIndent_Analysis:
         self.paths = np.arange(1,self.npaths+1)
         self.base = params['base']
         self.params = params
-        # print(self.params)
-        # print(self.base)
-        # print(os.path.join(self.base,params['file']))
+
         file = os.path.join(self.base,params['file'])
 
         self.data_obj = NanoIndent_Data(file)
@@ -56,22 +54,31 @@ class NanoIndent_Analysis:
     def normalizer(X,min,max):
         X_std = (X-X.min)
 
-    def extract_data(self,plot_err=True):
+    def extract_data(self,plot_err=True,passin=''):
         """
         Extract data value using array data
         """
-        full_mat = self.read_result_files(self.dirs)
+        if passin=='':
+            full_mat = self.read_result_files(self.dirs)
 #         print(full_mat)
-        bestFit,err = self.construct_bestfit_err_mat(full_mat,self.npaths,plot_err)
+            bestFit,err = self.construct_bestfit_err_mat(full_mat,self.npaths,plot_err)
 #         print(full_mat)
 #         print(bestFit)
-        best_Fit = np.reshape(copy.deepcopy(bestFit),(1, -1))
-        print(best_Fit)
+            best_Fit = np.reshape(copy.deepcopy(bestFit),(1, -1))
+            print(best_Fit)
 #         best_Fit = np.mean(bestFit,axis=0).reshape(-1,3).round(6)
+        else:
+            err = np.zeros([3,1])
+            bestFit = np.zeros([3,1])
+            best_Fit = passin
         print("Score:")
+        
         print(best_Fit)
-        self.bestFit = bestFit
+        # A, hf , m 
+        self.bestFit = best_Fit.flatten()
         self.err = err
+        print("Error:")
+        print("[{},{},{}]".format(str(np.round(self.err[0],2)),str(np.round(self.err[1],2)),str(np.round(self.err[2],2))))
         self.err_full = self.err.reshape((-1,3))
 
         self.bestFit_mat = best_Fit
@@ -93,25 +100,57 @@ class NanoIndent_Analysis:
         # print(self.err_full)
 
     def calculate_parameters(self,verbose=True):
-        # print(self.params[])
+        """
+        Calculates various parameters 
+        _dx = delta x on the highest points 
+        _dy = delta y on the highest points
+        _dy/dx = dy/dx slope 
+        _b = slope intercept 
+        """
         try:
             self.params['calibrations']
         except NameError:
             raise NameError("Missing Calibrations parameters")
 
-        dx = self.x_model[-1] - self.x_model[-2]
-        dy = self.y_model[-1] - self.y_model[-2]
-        dydx = dy/dx
+        
+        A = self.bestFit[0]
+        hf = self.bestFit[1]
+        m = self.bestFit[2]
+        print('params (A, hf, m):')
+        print(A, hf, m)
+#         sig_A_sq = self.err[0][0]
+#         sig_A_hf_sq = self.err[0][1]
+#         sig_hf_sq = self.err[1][1]
+#         sig_hf_m_sq = self.err[1][2]
+#         sig_m_sq = self.err[2][2]
+#         sig_A_m_sq = self.err[0][2]
+#         print('errors sigma[A, hf, m, A hf, hf m, A m]^2:')
+#         print(sig_A_sq, sig_hf_sq, sig_m_sq, sig_A_hf_sq, sig_hf_m_sq, sig_A_m_sq)
 
-        b = self.y_model[-1] -dydx * self.x_model[-1]
+        # load_unit = 'uN'
+        # load_factor = 10 ** 3       # if input load values in uN
+        load_unit = 'mN'
+        load_factor = 10 ** 6       # if input load values in mN
 
-        # Calculate linear
-        x_linear_min = self.x_slice[-1]
-        x_linear_max = (self.data_obj.max_y - b)/dydx
+        # slope from fit points
+        # _dx = self.x_model[-1] - self.x_model[-2]
+        # _dy = self.y_model[-1] - self.y_model[-2]
+        # _dydx = _dy/_dx
+        # Analytical form of S = dP/dh
+        h_max = self.data_obj.max_x
+        _dydx = A * m * (h_max - hf) ** (m - 1)  # dy/dx (input units)
+
+        _b = self.y_model[-1] -_dydx * self.x_model[-1]
+
+        # Calculate linear intercept points
+        x_linear_min = 0 # self.x_slice[-1]
+        x_linear_max = (self.data_obj.max_y - _b)/_dydx
+        print(_dydx)
+        print(x_linear_min, x_linear_max)
         self.x_linear = np.arange(x_linear_min,x_linear_max)
         self.y_linear = np.zeros(len(self.x_linear))
         for i in range(len(self.x_linear)):
-            self.y_linear[i] = (dydx*self.x_linear[i] + b)
+            self.y_linear[i] = (_dydx*self.x_linear[i] + _b)
 
         for i in range(len(self.y_linear)):
             k = 0
@@ -122,31 +161,54 @@ class NanoIndent_Analysis:
         self.x_linear = self.x_linear[k::]
         self.y_linear = self.y_linear[k::]
 
-        #
-        h_max = self.data_obj.max_x
-        P = self.data_obj.max_y
-        S = dydx
+        # Calculate material properties
+        P = self.y_raw[np.argmax(self.x_raw)] # self.data_obj.max_y
+        S = _dydx
+        epsilon = 0.75
 
-        hc = h_max - 0.75 * P/S
-        A = self.calculate_A(hc)
-        H = (P/A) *10**6
-        E_r = np.pi **(0.5) *S / (2*A**(0.5))*10**3
-        #print(E_r)
-        # Caclulate modulus & Er using equations from Abe
-        # Temp: Default Ei & nu values
-        # tip constant
+        hc = h_max - epsilon * P/S
+        Ac = self.calculate_Ac(hc)
+        H = (P/Ac) * load_factor * 10**3       # Hardness MPa
+        E_r = 0.5 * S * np.sqrt(np.pi / Ac) * load_factor  # Reduced Modulus, GPa
+
+        # Calculate modulus & Er using equations from Abe
+            # Temp: Default Ei & nu values
+            # tip constant
+
         E_i = self.params['tip_const']['E_i'] # GPa
         nu_i = self.params['tip_const']['nu_i']
         nu = self.params['nu']  # This needs to be a GUI entry!!
-        #E_r = np.pi**(0.5) * S / (2 * A ** (0.5)) * 10 ** 3
-        # Modulus of Elasticity
+        # Modulus of Elasticity (GPa)
         E = (1-nu**2)/(1/E_r-(1-nu_i**2)/E_i)
         #print(E)
+        # calculate errors
+        h_p = h_max - hf
+        # sigma S
+#         dS_dA = m * h_p ** (m - 1)
+#         dS_dm = A * h_p ** (m - 1) * (1 + m * np.log(h_p))
+#         dS_dhf = -1 * A * m * (m - 1) * h_p ** (m - 2)
+#         sig_S_sq = sig_A_sq * dS_dA ** 2 + sig_m_sq * dS_dm ** 2 + sig_hf_sq * dS_dhf ** 2 + \
+#                    2 * sig_A_m_sq * dS_dA * dS_dm + 2 * sig_A_hf_sq * dS_dA * dS_dhf + 2 * sig_hf_m_sq * dS_dhf * dS_dm
+#         # sigma S, same units as S
+#         sig_S = np.sqrt(sig_S_sq)
+#         # sigma hc, nm
+#         sig_hc = sig_S * epsilon * P / S ** 2
+#         # sig_hc = sig_S*(h_max-hc)/S   # same expression
+#         # sigma Ac
+#         sig_Ac = np.absolute(self.calculate_sigma_Ac(hc)) * sig_hc  # nm^2
+#         # sigma H
+#         sig_H = sig_Ac * P / Ac ** 2 * load_factor
+#         # sigma Er
+#         sig_Er = 0.5 * np.sqrt(np.pi * (sig_S ** 2 / Ac + (S * sig_Ac) ** 2 / (4 * Ac ** 3))) * load_factor  # Er(S,Ac)
+#         # sig_Er = sig_S*np.sqrt(np.pi/Ac) * (1+epsilon*P*sig_Ac/(4*S*sig_hc*Ac)) /2 * load_factor    # Er(S)
+#         # sigma E
+#         sig_E = sig_Er * np.absolute(-1 * (nu ** 2 - 1) * E_i ** 2 / (E_i + (nu_i ** 2 - 1) * E_r) ** 2)
+
         calculated_result = {
-            'Stiffness': np.round(dydx,3),
+            'Stiffness': np.round(S,3),
             'Max Depth': h_max,
             'Max Load': P,
-            'Area': A,
+            'Area': Ac,
             'H': H,
             'E_r': E_r,
             'E': E
@@ -154,24 +216,38 @@ class NanoIndent_Analysis:
         self.params['result'] = calculated_result
         print("Result in analysis: ", self.params['result'])
         self.params['bestFit'] = self.best_Fit_n
-        if verbose:
-            print("Stiffness S = dP/dh: ", np.round(dydx, 3))
-            print('Maximum Depth (nm):' + str(h_max))
-            print('Maximum Load (uN):' + str(P))
-            print("Area: " + str(np.round(A, 5)) + ' nm^2')
-            print("H: " + str(np.round(H, 5)) + ' MPa')
-            print("E_r: " + str(np.round(E_r, 5)) + ' GPa')
-            print("E:" + str(np.round(E, 5)) + ' GPa')
+        # if verbose:
+        print('[val  sigma  sigma/val]:')
+#         print('S = dP/dh ({}/nm): '.format(load_unit) + str(np.round([S, sig_S, sig_S / S], 5)))
+#         print('Max Depth (nm): ' + str(h_max))
+#         print('Max Load ({}): '.format(load_unit) + str(P))
+#         print('hc (nm): ' + str([hc, sig_hc, sig_hc / hc]))
+#         print("Area (nm^2): " + str(np.round([Ac, sig_Ac, sig_Ac / Ac], 5)))
+#         print("H (MPa): " + str(np.round([H, sig_H, sig_H / H], 5)))
+#         print("Er (GPa): " + str(np.round([E_r, sig_Er, sig_Er / E_r], 5)))
+#         print("E (GPa): " + str(np.round([E, sig_E, sig_E / E], 5)))
+#         print(S, sig_S, h_max, P, Ac, sig_Ac, H, sig_H, E_r, sig_Er, E, sig_E)
 
-    def calculate_A(self,hc):
+        
+    def calculate_Ac(self,hc):
         const = 2
-        A = 0
+        Ac = 0
         for i in range(len(self.params['calibrations'])):
-            A += self.params['calibrations']['C' + str(i)] *hc **const
+            Ac += self.params['calibrations']['C' + str(i)] *hc **const
             const = const/2
+        return Ac
 
-        return A
-
+    def calculate_sigma_Ac(self,hc):
+        coeff = 2
+        sig_Ac = 0
+        for i in range(len(self.params['calibrations'])):
+            expo = -2**(-(i+1))*(-4 + 2**(i+1))
+            # print(coeff, expo)
+            sig_Ac += coeff*self.params['calibrations']['C' + str(i)] * hc**expo
+            coeff = coeff/2
+        return sig_Ac
+    
+    
     def get_params(self):
         return self.params
 
@@ -189,7 +265,7 @@ class NanoIndent_Analysis:
         yTotal = np.zeros(len(self.x_slice))
         # print(self.bestFit)
         for i in range(len(bestFit)):
-
+            
             # y = voigt_shape.voigt_fuc(self.x_raw, bestFit[i,0], bestFit[i,1], bestFit[i,2], bestFit[i,3])
             y = OliverPharr(self.x_slice,bestFit[i,0],bestFit[i,1],bestFit[i,2])
             self.individual_export_arr[i,:] = y
@@ -238,6 +314,7 @@ class NanoIndent_Analysis:
                 if i == 0:
                     full_mat = gen_csv_unflatten
                 full_mat = np.vstack((full_mat,gen_csv_unflatten))
+                self.full_mat = full_mat
             except OSError:
                 print(" " + str(i) + " Missing")
                 pass
@@ -267,22 +344,31 @@ class NanoIndent_Analysis:
         return label,amp_label,center_label,sigma_label,gamma_label
 
     def construct_bestfit_err_mat(self,full_mat,npaths,plot=False):
-        r"""
+        """
         Construct the average best fit matrix using the sum of the files, and
         generate the corresponding labels using the paths provided.
 
-        (Helper function)
+        full_mat <mat>: n by m where n is the number of samples and m is the number of parameters
+        npaths <int>: number of paths
+        plot <bol>: if it plot or not
 
         """
+        score = []
         full_mat_var_cov = np.cov(full_mat.T)
-        full_mat_diag = np.diag(full_mat_var_cov)#/self.scaler.scale_
+        full_mat_diag = np.diag(full_mat_var_cov)
         err = np.sqrt(full_mat_diag)
 
         labels = self.generate_labels()
 #         print(full_mat)
 #         bestFit = np.mean(full_mat,axis=0)
-        bestFit = full_mat[-1,:]
-#         print(bestFit)
+#         bestFit = full_mat[-1,:]
+    
+        for i in self.full_mat:
+            arr = i.reshape((1,-1))
+            score.append(self.fitness(arr))
+        bestScore = np.nanargmin(score)
+        bestFit = full_mat[bestScore]
+
         if plot:
             plt.figure(figsize=(7,5))
             plt.xticks(np.arange(len(full_mat_diag)),labels[0],rotation=70);
@@ -491,10 +577,10 @@ class NanoIndent_Analysis:
         """
 
         x = np.linspace(0,1,self.npaths)
-        color = [color_map(i) for i in x]
-        test = 65535;
-        for i in range(len(color)):
-            color[i] = (int(test*color[i][0]),int(test*color[i][1]),int(test*color[i][2]))
+        color = [color_map(i) for i in x]        # print(self.params)
+        # print(self.base)
+        # print(os.path.join(self.base,params['file']))
+        color[i] = (int(test*color[i][0]),int(test*color[i][1]),int(test*color[i][2]))
         # Change to X and Y for data
         f.write('•ModifyGraph rgb(fit_' + self.header + '_y)=(0,0,0)');f.write('\n')
         for i in range(len(color)):

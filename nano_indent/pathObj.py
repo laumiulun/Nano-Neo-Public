@@ -78,6 +78,10 @@ class OliverPharr:
         self.mutate_A(chance)
         self.mutate_hf(chance)
         self.mutate_m(chance)
+
+    def verbose(self):
+        return [self.get_A(),self.get_hf(),self.get_m()]
+
 class StraightLine:
     """
     Stright Line
@@ -99,3 +103,15 @@ class StraightLine:
 
     def get_func(self,x):
         return self.m * x + self.b
+
+
+if __name__ == "__main__":
+    pars_range = {
+        'A_range': [0.1,100.0,0.01],
+        'hf_range':[500.0,1300.0,0.01],
+        'm_range':[1.0,2.0,0.001]
+    }
+    x_slice = np.arange(1300,1400,10)
+    test = OliverPharr(1,pars_range)
+    print(test.verbose())
+    print(test.get_func(x_slice))

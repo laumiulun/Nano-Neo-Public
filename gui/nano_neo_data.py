@@ -96,8 +96,8 @@ class NanoIndent_Data:
         self._data_x = self._rawdata[:,0]
         self._data_y = self._rawdata[:,1]
         # parameters
-        self.max_xloc = np.argmax(self._rawdata[:,0])
-        self.max_yloc = np.argmax(self._rawdata[:,1])
+        self.max_xloc = np.nanargmax(self._rawdata[:,0])
+        self.max_yloc = np.nanargmax(self._rawdata[:,1])
 
         self.max_x = self._rawdata[:,0][self.max_xloc]
         self.max_y = self._rawdata[:,1][self.max_yloc]
