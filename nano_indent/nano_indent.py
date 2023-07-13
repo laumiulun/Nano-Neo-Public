@@ -10,6 +10,9 @@ from .nano_neo_data import NanoIndent_Data
 Author: Andy Lau
 """
 
+# Setup some default constraints
+MAX = 3.40282e+38
+MIN = 1.17549e-38
 
 class NANO_GA:
 
@@ -135,7 +138,7 @@ class NANO_GA:
 
     def create_range(self,value,percentage,dt,prec):
         """
-        Create delta to calculate the ranges 
+        Create delta to calculate the ranges
         """
         minus = round(value - percentage*value,prec)
         plus = round(value + percentage*value,prec)
@@ -179,8 +182,7 @@ class NANO_GA:
         for j in range(len(self.x_slice)):
 
             loss = loss + (yTotal[j]*self.x_slice[j]**2 - self.y_slice[j]* self.x_slice[j]**2 )**2
-        # if loss == np.nan:
-            # print(individual[0].verbose())
+
         return loss
 
     def eval_Population(self):
@@ -205,7 +207,7 @@ class NANO_GA:
         self.currBestFit = self.sorted_population[0]
 
         return score
-    
+
 
     def next_generation(self):
         """
@@ -275,7 +277,7 @@ class NANO_GA:
                     self.mut_chance -= 0.5
                     self.mut_chance = abs(self.mut_chance)
 
-        
+
         for i in range(self.npops):
             if random.random()*100 < self.mut_chance:
                 self.nmutate += 1
