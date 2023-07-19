@@ -89,7 +89,7 @@ class App():
         # Waiting to create path variable for calibration because I think it will be deleted
         self.csv_calibration_file = StringVar(self.root, "Please choose a calibration file")
         self.yes_folder = IntVar()
-        self.multi_known = BooleanVar(False)
+        self.multi_known = BooleanVar(value = False)
         self.multi_known = False  # This will change to true when the user has already said if they do/do not want to generate/run multiple files in the folder so generate ini does nto keep asking
         self.filelist = []
         self.command_list = mp.Queue()
@@ -828,7 +828,7 @@ class App():
         h_f_delta_entry = ttk.Entry(self.fitting_param_tab, textvariable=self.h_f_delta, font=self.entryFont)
         h_f_delta_entry.grid(column=6, row=3, sticky=(W, E))
         m_delta_entry = ttk.Entry(self.fitting_param_tab, textvariable=self.m_delta, font=self.entryFont)
-        m_delta_entry.grid(column=6, row=4, sticky=(W, E))       
+        m_delta_entry.grid(column=6, row=4, sticky=(W, E))
 
         # Adding path fits completely separate so that the others have the two column format
         path_fit = ttk.Label(self.fitting_param_tab, text="fit type", font=self.labelFont)
